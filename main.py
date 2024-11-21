@@ -4,8 +4,9 @@ import asyncio
 import json
 from fastapi.middleware.cors import CORSMiddleware
 from db_config import users_list, create_tables  # Importa correctamente estas funciones
-
 import logging
+import aiohttp  # Agregamos esta importación
+import os  # Agregamos esta importación
 
 # Configurar el logger
 logging.basicConfig(level=logging.INFO)
@@ -24,6 +25,31 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Nueva ruta para el ping
+@app.get("/ping")
+async def ping():
+    return {"status": "alive"}
+
+# Nueva función para mantener viva la aplicación
+async def keep_alive():
+    """Hace ping al servidor cada 5 minutos para mantenerlo activo"""
+    app_url ='https://chat-api-flyo.onrender.com'
+    while True:
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"{app_url}/ping") as response:
+                    logger.info(f"Ping status: {response.status}")
+            await asyncio.sleep(300)  # 5 minutos
+        except Exception as e:
+            logger.error(f"Error en keep_alive: {e}")
+            await asyncio.sleep(60)  # Si hay error, espera 1 minuto antes de reintentar
+
+# Modificar la función de inicio
+@app.on_event("startup")
+async def startup_event():
+    """Inicia el proceso de keep-alive cuando arranca la aplicación"""
+    asyncio.create_task(keep_alive())
 
 async def broadcast_user_count():
     """Envía el número de usuarios conectados a todos los clientes."""
